@@ -49,11 +49,13 @@ function createTileRenderer(options) {
     return ensureCanvas(1, 1) !== null;
   }
 
-  function getOutputFormat(width, isColor, enforceMonochrome) {
+function getOutputFormat(width, isColor, enforceMonochrome) {
     var outputIsColor = isColor && !enforceMonochrome;
     return {
       outputIsColor: outputIsColor,
-      outputBytesPerRow: outputIsColor ? width : (width + 7) >> 3,
+      // 8-bit color uses 1 byte per pixel (width). 
+      // 4-bit uses half a byte per pixel (width / 2).
+      outputBytesPerRow: outputIsColor ? width : Math.ceil(width / 2),
     };
   }
 
@@ -187,34 +189,37 @@ function createTileRenderer(options) {
     }
   }
 
-  function packCanvas(ctx, width, height, outputFormat) {
+function packCanvas(ctx, width, height, outputFormat) {
     var imageData = ctx.getImageData(0, 0, width, height);
+    var data = imageData.data;
+
     if (outputFormat.outputIsColor) {
-      return {
-        packed: imagePacking.packColorRle2Bit(imageData, width, height),
-        compressionFormat: 1,
-      };
+      // COLOR WATCHES: 8-bit Pebble Color (1 byte per pixel)
+      var packed = new Uint8Array(width * height);
+      for (var i = 0; i < width * height; i++) {
+        var r = data[i * 4];
+        var g = data[i * 4 + 1];
+        var b = data[i * 4 + 2];
+        
+        // Convert standard RGB to Pebble 64-Color Palette (ARGB8)
+        // Format: 11RRGGBB (Bits 6-7 always 1)
+        var pR = r >> 6;
+        var pG = g >> 6;
+        var pB = b >> 6;
+        packed[i] = 192 | (pR << 4) | (pG << 2) | pB; 
+      }
+      return { packed: packed, compressionFormat: 0 }; // 0 = raw 8-bit
+    } else {
+      // B&W WATCHES: 4-bit Grayscale (2 pixels per byte)
+      var packed = new Uint8Array(Math.ceil(width * height / 2));
+      for (var i = 0; i < width * height; i++) {
+        var luma = (data[i*4] * 0.299 + data[i*4+1] * 0.587 + data[i*4+2] * 0.114);
+        var grey = Math.min(15, Math.round(luma / 17));
+        if (i % 2 === 0) packed[Math.floor(i/2)] = (grey << 4);
+        else packed[Math.floor(i/2)] |= (grey & 0x0F);
+      }
+      return { packed: packed, compressionFormat: 1 }; // 1 = 4-bit grey
     }
-
-    var monoRaw = imagePacking.packMonochrome(
-      imageData,
-      width,
-      height,
-      outputFormat.outputBytesPerRow
-    );
-    var monoRle = imagePacking.packMonochromeBitRle2(imageData, width, height);
-
-    if (monoRle.length < monoRaw.length) {
-      return {
-        packed: monoRle,
-        compressionFormat: 2,
-      };
-    }
-
-    return {
-      packed: monoRaw,
-      compressionFormat: 0,
-    };
   }
 
   function render(params) {

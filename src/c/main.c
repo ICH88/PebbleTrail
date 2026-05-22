@@ -1,5 +1,13 @@
 #include <pebble.h>
 
+// 4x4 Bayer Dither Matrix for 16-level grayscale mapping
+static const uint8_t __attribute__((unused)) BAYER_4x4[16] = {
+     0,  8,  2, 10,
+    12,  4, 14,  6,
+     3, 11,  1,  9,
+    15,  7, 13,  5
+};
+
 static Window *s_window;
 static Layer *s_canvas_layer;
 static TextLayer *s_status_layer;
@@ -128,8 +136,6 @@ static void prv_reset_image_state(void)
   }
 }
 
-// Decode 2-bit run / 6-bit color stream into 8-bit Pebble color bytes.
-// Byte format: [run-1:2 bits][color6:6 bits], where run is 1..4.
 static bool prv_decode_color_rle2_to_raw(const uint8_t *src,
                                          size_t src_len,
                                          uint8_t *dst,
@@ -150,17 +156,9 @@ static bool prv_decode_color_rle2_to_raw(const uint8_t *src,
     }
   }
 
-  // Valid stream must fill exactly the expected number of pixels.
   return di == dst_len;
 }
 
-// Decode mono bit-RLE stream (compression_format=2):
-// byte0 bit0=start color (0 black, 1 white)
-// then 2-bit tokens:
-//   00/01/10 => runs 1/2/3
-//   11 + 8-bit ext:
-//     ext=0 => continuation run 258 (do not toggle color)
-//     ext=1..255 => terminal run ext+3 (4..258), then toggle color
 static bool prv_decode_mono_bitrle2_to_packed(const uint8_t *src,
                                               size_t src_len,
                                               uint8_t *dst,
@@ -168,10 +166,7 @@ static bool prv_decode_mono_bitrle2_to_packed(const uint8_t *src,
                                               uint16_t height,
                                               uint16_t row_bytes)
 {
-  if (src_len < 1)
-  {
-    return false;
-  }
+  if (src_len < 1) return false;
 
   memset(dst, 0, (size_t)row_bytes * height);
 
@@ -179,15 +174,12 @@ static bool prv_decode_mono_bitrle2_to_packed(const uint8_t *src,
   uint8_t color = start_color;
   uint32_t total_pixels = (uint32_t)width * (uint32_t)height;
   uint32_t pixel_index = 0;
-  uint32_t bit_pos = 8; // Skip header byte
+  uint32_t bit_pos = 8;
   uint32_t total_bits = (uint32_t)src_len * 8;
 
   while (pixel_index < total_pixels)
   {
-    if (bit_pos + 2 > total_bits)
-    {
-      return false;
-    }
+    if (bit_pos + 2 > total_bits) return false;
 
     uint8_t token = 0;
     for (uint8_t i = 0; i < 2; i++)
@@ -202,10 +194,7 @@ static bool prv_decode_mono_bitrle2_to_packed(const uint8_t *src,
     bool toggle_after_run = true;
     if (token == 3)
     {
-      if (bit_pos + 8 > total_bits)
-      {
-        return false;
-      }
+      if (bit_pos + 8 > total_bits) return false;
 
       uint8_t ext = 0;
       for (uint8_t i = 0; i < 8; i++)
@@ -250,10 +239,7 @@ static bool prv_decode_mono_bitrle2_to_packed(const uint8_t *src,
 
 static void prv_request_render(void)
 {
-  if (!s_phone_connected)
-  {
-    return;
-  }
+  if (!s_phone_connected) return;
 
   DictionaryIterator *iter;
   if (app_message_outbox_begin(&iter) != APP_MSG_OK)
@@ -313,10 +299,7 @@ static void prv_phone_connection_handler(bool connected)
 static void prv_inbox_received_handler(DictionaryIterator *iter, void *context)
 {
   Tuple *cmd_t = dict_find(iter, MESSAGE_KEY_cmd);
-  if (!cmd_t)
-  {
-    return;
-  }
+  if (!cmd_t) return;
 
   APP_LOG(APP_LOG_LEVEL_INFO, "Inbox message received, cmd: %d", cmd_t->value->uint8);
   if (cmd_t->value->uint8 == CMD_INIT)
@@ -325,7 +308,6 @@ static void prv_inbox_received_handler(DictionaryIterator *iter, void *context)
     if (ready_t)
     {
       s_js_ready = ready_t->value->uint8 != 0;
-      APP_LOG(APP_LOG_LEVEL_INFO, "JSReady: %d", s_js_ready);
       Tuple *show_time_t = dict_find(iter, MESSAGE_KEY_showTimeOverlay);
       if (show_time_t)
       {
@@ -335,13 +317,10 @@ static void prv_inbox_received_handler(DictionaryIterator *iter, void *context)
       Tuple *canvas_supported_t = dict_find(iter, MESSAGE_KEY_isCanvasSupported);
       if (canvas_supported_t && canvas_supported_t->value->uint8)
       {
-        APP_LOG(APP_LOG_LEVEL_INFO, "JS reports canvas support");
         prv_request_render();
       }
       else
       {
-        APP_LOG(APP_LOG_LEVEL_WARNING, "JS reports no canvas support");
-        // show error message on watch
         text_layer_set_text(s_status_layer, "Canvas not supported :(");
       }
     }
@@ -358,129 +337,45 @@ static void prv_inbox_received_handler(DictionaryIterator *iter, void *context)
     Tuple *offset_t = dict_find(iter, MESSAGE_KEY_chunk_offset);
     Tuple *data_t = dict_find(iter, MESSAGE_KEY_chunk_data);
 
-    APP_LOG(APP_LOG_LEVEL_INFO, "Received image chunk"); //, offset: %d, length: %d", offset_t ? offset_t->value->uint32 : 0, data_t ? data_t->length : 0);
-    if (!offset_t || !data_t)
-    {
-      return;
-    }
+    if (!offset_t || !data_t) return;
 
-    if (width_t)
-    {
-      s_image_width = width_t->value->uint16;
-    }
-    if (height_t)
-    {
-      s_image_height = height_t->value->uint16;
-    }
-    if (row_bytes_t)
-    {
-      s_image_row_bytes = row_bytes_t->value->uint16;
-    }
-    if (is_color_t)
-    {
-      s_image_is_color = is_color_t->value->uint8 != 0;
-    }
-    if (compression_t)
-    {
-      s_compression_format = compression_t->value->uint8;
-    }
+    if (width_t) s_image_width = width_t->value->uint16;
+    if (height_t) s_image_height = height_t->value->uint16;
+    if (row_bytes_t) s_image_row_bytes = row_bytes_t->value->uint16;
+    if (is_color_t) s_image_is_color = is_color_t->value->uint8 != 0;
+    if (compression_t) s_compression_format = compression_t->value->uint8;
 
     if (total_t && (!s_image_buffer || s_image_buffer_size != total_t->value->uint32))
     {
       prv_reset_image_state();
-      if (compression_t)
-      {
-        s_compression_format = compression_t->value->uint8;
-      }
+      if (compression_t) s_compression_format = compression_t->value->uint8;
+      
       s_image_buffer_size = total_t->value->uint32;
       s_image_buffer = malloc(s_image_buffer_size);
+      
+      // OUT OF MEMORY CHECK #1
       if (!s_image_buffer)
       {
         s_image_buffer_size = 0;
+        APP_LOG(APP_LOG_LEVEL_ERROR, "OOM: map buffer size %d", (int)total_t->value->uint32);
+        prv_set_status_text("Error: Out of memory!");
         return;
       }
       memset(s_image_buffer, 0, s_image_buffer_size);
     }
 
-    if (!s_image_buffer)
-    {
-      return;
-    }
+    if (!s_image_buffer) return;
 
     const uint32_t offset = offset_t->value->uint32;
     const uint16_t length = data_t->length;
-    if (offset + length > s_image_buffer_size)
-    {
-      return;
-    }
+    if (offset + length > s_image_buffer_size) return;
 
     memcpy(s_image_buffer + offset, data_t->value->data, length);
     s_received_bytes += length;
 
     if (s_received_bytes >= s_image_buffer_size)
     {
-      if (s_image_is_color && s_compression_format == 1)
-      {
-        size_t decoded_size = (size_t)s_image_width * (size_t)s_image_height;
-        uint8_t *decoded = malloc(decoded_size);
-        if (!decoded)
-        {
-          APP_LOG(APP_LOG_LEVEL_ERROR, "Failed to allocate decoded color buffer");
-          prv_reset_image_state();
-          return;
-        }
-
-        bool ok = prv_decode_color_rle2_to_raw(
-            s_image_buffer,
-            s_image_buffer_size,
-            decoded,
-            decoded_size);
-
-        if (!ok)
-        {
-          APP_LOG(APP_LOG_LEVEL_ERROR, "Invalid color compressed frame");
-          free(decoded);
-          prv_reset_image_state();
-          return;
-        }
-
-        free(s_image_buffer);
-        s_image_buffer = decoded;
-        s_image_buffer_size = decoded_size;
-        s_image_row_bytes = s_image_width;
-      }
-      else if (!s_image_is_color && s_compression_format == 2)
-      {
-        size_t decoded_size = (size_t)s_image_row_bytes * (size_t)s_image_height;
-        uint8_t *decoded = malloc(decoded_size);
-        if (!decoded)
-        {
-          APP_LOG(APP_LOG_LEVEL_ERROR, "Failed to allocate decoded mono buffer");
-          prv_reset_image_state();
-          return;
-        }
-
-        bool ok = prv_decode_mono_bitrle2_to_packed(
-            s_image_buffer,
-            s_image_buffer_size,
-            decoded,
-            s_image_width,
-            s_image_height,
-            s_image_row_bytes);
-
-        if (!ok)
-        {
-          APP_LOG(APP_LOG_LEVEL_ERROR, "Invalid monochrome compressed frame");
-          free(decoded);
-          prv_reset_image_state();
-          return;
-        }
-
-        free(s_image_buffer);
-        s_image_buffer = decoded;
-        s_image_buffer_size = decoded_size;
-      }
-
+      // No secondary malloc here. We keep s_image_buffer as is.
       s_image_ready = true;
       layer_set_hidden(text_layer_get_layer(s_status_layer), true);
       layer_mark_dirty(s_canvas_layer);
@@ -508,106 +403,71 @@ static void prv_outbox_failed_handler(DictionaryIterator *iter, AppMessageResult
 static void prv_canvas_update_proc(Layer *layer, GContext *ctx)
 {
   GRect bounds = layer_get_bounds(layer);
-
-  if (!s_image_ready || !s_image_buffer)
-  {
+  if (!s_image_ready || !s_image_buffer) {
     graphics_context_set_fill_color(ctx, GColorWhite);
     graphics_fill_rect(ctx, bounds, 0, GCornerNone);
-    prv_draw_time_overlay(layer, ctx);
     return;
   }
 
   GBitmap *fb = graphics_capture_frame_buffer(ctx);
-  if (!fb)
-  {
-    return;
-  }
+  if (!fb) return;
 
-  const GBitmapFormat fb_format = gbitmap_get_format(fb);
-  const bool fb_is_circular = fb_format == GBitmapFormat8BitCircular;
+  uint8_t *fb_data = gbitmap_get_data(fb);
   const uint16_t fb_row_bytes = gbitmap_get_bytes_per_row(fb);
-  const uint16_t copy_height = s_image_height < bounds.size.h ? s_image_height : bounds.size.h;
 
-  if (fb_is_circular)
+for (uint16_t y = 0; y < s_image_height && y < bounds.size.h; y++)
   {
-    const uint16_t copy_width = s_image_width < bounds.size.w ? s_image_width : bounds.size.w;
-    for (uint16_t y = 0; y < copy_height; y++)
-    {
-      GBitmapDataRowInfo row_info = gbitmap_get_data_row_info(fb, y);
-      if (!row_info.data)
-      {
-        continue;
-      }
+    uint8_t *dst_row = fb_data + (y * fb_row_bytes);
 
-      int16_t min_x = row_info.min_x;
-      if (min_x < 0)
-      {
-        min_x = 0;
-      }
+#if defined(PBL_BW)
+    // On B&W watches, start the row out as Black (0)
+    memset(dst_row, 0, fb_row_bytes);
+#endif
 
-      int16_t max_x = row_info.max_x;
-      if (max_x >= copy_width)
-      {
-        max_x = copy_width - 1;
-      }
+    for (uint16_t x = 0; x < s_image_width && x < bounds.size.w; x++) {
+        uint32_t pixel_idx = (uint32_t)(y * s_image_width) + x;
 
-      if (min_x > max_x)
-      {
-        continue;
-      }
-
-      const uint8_t *src_row = s_image_buffer + y * s_image_row_bytes;
-      if (s_image_is_color)
-      {
-        memcpy(row_info.data + min_x, src_row + min_x, (size_t)(max_x - min_x + 1));
-      }
-      else
-      {
-        for (int16_t x = min_x; x <= max_x; x++)
-        {
-          const uint8_t src = src_row[x >> 3];
-          const bool bit = ((src >> (7 - (x & 7))) & 0x1) != 0;
-          row_info.data[x] = bit ? 0xFF : 0xC0;
+#if defined(PBL_COLOR)
+        // --- COLOR WATCHES ---
+        if (s_image_is_color && s_compression_format == 0) {
+            // Write 8-bit Pebble Color directly to the frame buffer
+            dst_row[x] = s_image_buffer[pixel_idx];
+        } else {
+            // Fallback for 4-bit grayscale on color watches
+            uint8_t byte = s_image_buffer[pixel_idx / 2];
+            uint8_t val = (pixel_idx % 2 == 0) ? ((byte >> 4) & 0x0F) : (byte & 0x0F);
+            
+            if (val > 11) dst_row[x] = GColorWhiteARGB8;
+            else if (val > 7) dst_row[x] = GColorLightGrayARGB8;
+            else if (val > 3) dst_row[x] = GColorDarkGrayARGB8;
+            else dst_row[x] = GColorBlackARGB8;
         }
-      }
-    }
-  }
-  else if (s_image_is_color)
-  {
-    uint8_t *fb_data = gbitmap_get_data(fb);
-    const uint16_t copy_row_bytes = s_image_width;
-    const uint16_t safe_row_bytes = copy_row_bytes < fb_row_bytes ? copy_row_bytes : fb_row_bytes;
-    for (uint16_t y = 0; y < copy_height; y++)
-    {
-      memcpy(fb_data + y * fb_row_bytes, s_image_buffer + y * s_image_row_bytes, safe_row_bytes);
-    }
-  }
-  else if (!s_device_is_color)
-  {
-    uint8_t *fb_data = gbitmap_get_data(fb);
-    const uint16_t safe_row_bytes = s_image_row_bytes < fb_row_bytes ? s_image_row_bytes : fb_row_bytes;
-    for (uint16_t y = 0; y < copy_height; y++)
-    {
-      memcpy(fb_data + y * fb_row_bytes, s_image_buffer + y * s_image_row_bytes, safe_row_bytes);
-    }
-  }
-  else
-  {
-    uint8_t *fb_data = gbitmap_get_data(fb);
-    const uint16_t copy_width = s_image_width < bounds.size.w ? s_image_width : bounds.size.w;
-    for (uint16_t y = 0; y < copy_height; y++)
-    {
-      const uint8_t *src_row = s_image_buffer + y * s_image_row_bytes;
-      uint8_t *dst_row = fb_data + y * fb_row_bytes;
-      for (uint16_t x = 0; x < copy_width; x++)
-      {
-        const uint8_t src = src_row[x >> 3];
-        const bool bit = ((src >> (7 - (x & 7))) & 0x1) != 0;
-        dst_row[x] = bit ? 0xFF : 0xC0;
-      }
-    }
-  }
+#else
+        // --- B&W WATCHES (Aplite / Pebble Steel) ---
+        uint8_t byte = s_image_buffer[pixel_idx / 2];
+        uint8_t val = (pixel_idx % 2 == 0) ? ((byte >> 4) & 0x0F) : (byte & 0x0F);
+      
 
+
+        // HYBRID EDGE-PRESERVING DITHER
+        if (val <= 3) {
+            // 1. HARD BLACK: Dark pixels (roads, labels, borders) stay solid BLACK.
+            // (We do nothing here because memset already set the row to 0/Black).
+        //} else if (val >= 13) {
+        //    // 2. HARD WHITE: Light pixels (map background) stay crisp WHITE.
+        //    // This prevents "dirty" dots in empty spaces.
+        //    dst_row[x >> 3] |= (1 << (x & 7));
+        } else {
+            // 3. DITHERED GREY: Mid-tones (parks, water, shading) are dithered.
+            // The 4x4 matrix distributes the dots smoothly.
+            uint8_t threshold = BAYER_4x4[(y % 4) * 4 + (x % 4)];
+            if (val > threshold) {
+                dst_row[x >> 3] |= (1 << (x & 7)); // Set White
+            }
+        }
+#endif
+    }
+  }
   graphics_release_frame_buffer(ctx, fb);
   prv_draw_time_overlay(layer, ctx);
 }
@@ -627,31 +487,20 @@ static void prv_window_load(Window *window)
   text_layer_set_background_color(s_status_layer, GColorClear);
   layer_add_child(window_layer, text_layer_get_layer(s_status_layer));
 
-  s_image_width = bounds.size.w;
-  s_image_height = bounds.size.h;
+  // --- REPLACE FROM HERE ---
+  s_image_width = (uint16_t)bounds.size.w;
+  s_image_height = (uint16_t)bounds.size.h;
+  
+  // Force row bytes to be equal to width so the buffer is a simple 2D array
+  // This eliminates the 'gaps' or 'staggered pixels'
+  s_image_row_bytes = s_image_width; 
+
   s_device_is_color = false;
 #if defined(PBL_COLOR)
   s_device_is_color = true;
 #endif
   s_image_is_color = s_device_is_color;
-
-  if (s_device_is_color)
-  {
-    s_image_row_bytes = s_image_width;
-  }
-  else
-  {
-    GBitmap *temp = gbitmap_create_blank(GSize(s_image_width, s_image_height), GBitmapFormat1Bit);
-    if (temp)
-    {
-      s_image_row_bytes = gbitmap_get_bytes_per_row(temp);
-      gbitmap_destroy(temp);
-    }
-    else
-    {
-      s_image_row_bytes = (s_image_width + 7) / 8;
-    }
-  }
+  // --- TO HERE ---
 
   prv_reset_image_state();
   prv_schedule_time_overlay_tick();
@@ -691,10 +540,8 @@ static void prv_window_unload(Window *window)
 
 static void prv_focus_handler(bool in_focus)
 {
-  if (!in_focus)
-  {
-    return;
-  }
+  if (!in_focus) return;
+  
   s_phone_connected = connection_service_peek_pebble_app_connection();
   prv_phone_connection_handler(s_phone_connected);
 }
@@ -715,20 +562,9 @@ static void send_click(int which)
   app_message_outbox_send();
 }
 
-static void click_up_handler(ClickRecognizerRef recognizer, void *context)
-{
-  send_click(-1);
-}
-
-static void click_sel_handler(ClickRecognizerRef recognizer, void *context)
-{
-  send_click(0);
-}
-
-static void click_down_handler(ClickRecognizerRef recognizer, void *context)
-{
-  send_click(1);
-}
+static void click_up_handler(ClickRecognizerRef recognizer, void *context) { send_click(-1); }
+static void click_sel_handler(ClickRecognizerRef recognizer, void *context) { send_click(0); }
+static void click_down_handler(ClickRecognizerRef recognizer, void *context) { send_click(1); }
 
 static void click_config_provider(void *context)
 {
@@ -741,17 +577,24 @@ static void prv_init(void)
 {
   s_window = window_create();
   window_set_window_handlers(s_window, (WindowHandlers){
-                                           .load = prv_window_load,
-                                           .unload = prv_window_unload,
-                                       });
+                                             .load = prv_window_load,
+                                             .unload = prv_window_unload,
+                                         });
 
   app_message_register_inbox_received(prv_inbox_received_handler);
   app_message_register_outbox_failed(prv_outbox_failed_handler);
-  const uint32_t inbox = app_message_inbox_size_maximum();
-  const uint32_t outbox = app_message_outbox_size_maximum();
+  
+  uint32_t inbox = app_message_inbox_size_maximum();
+  uint32_t outbox = app_message_outbox_size_maximum();
+  
+  // Cap AppMessage buffers on memory-constrained Aplite platforms
+#if defined(PBL_PLATFORM_APLITE)
+  if (inbox > 2048)  inbox = 2048;
+  if (outbox > 512) outbox = 512;
+#endif
+
   app_message_open(inbox, outbox);
 
-  // connection handler
   connection_service_subscribe((ConnectionHandlers){
       .pebble_app_connection_handler = prv_phone_connection_handler,
   });
@@ -762,11 +605,7 @@ static void prv_init(void)
   window_stack_push(s_window, animated);
 
   prv_phone_connection_handler(s_phone_connected);
-
-  // button click handlers
   window_set_click_config_provider(s_window, click_config_provider);
-
-  APP_LOG(APP_LOG_LEVEL_INFO, "App initialized with inbox size: %d, outbox size: %d", (int)inbox, (int)outbox);
 }
 
 static void prv_deinit(void)

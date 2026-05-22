@@ -17,14 +17,13 @@ try {
   console.log("Could not load dependencies " + JSON.stringify(e));
 }
 
-const CHUNK_SIZE = 7 * 1024;
+const CHUNK_SIZE = 1024; //7 * 1024;
 const TILE_CACHE_TTL_MS = 5 * 60 * 1000;
 const TILE_CACHE_CLEANUP_INTERVAL_MS = 60 * 1000;
 const TILE_CACHE_MAX_ENTRIES = 64;
 const BTN_UP = -1;
 const BTN_SELECT = 0;
 const BTN_DOWN = 1;
-
 const ZOOM_LEVEL_MIN = 0;
 const ZOOM_LEVEL_MAX = 20;
 
@@ -352,7 +351,7 @@ Pebble.addEventListener("appmessage", function (e) {
     renderState.isColor = payload.is_color === 1;
 
     if (config.tileProvider === undefined) {
-      config.tileProvider = renderState.isColor ? "osm" : "stamen_toner";
+      config.tileProvider = renderState.isColor ? "osm" : "osm_topo";
     }
 
     console.log(

@@ -27,6 +27,8 @@ module.exports = [
         defaultValue: "stamen_toner",
         label: "Map Provider",
         options: [
+          //{ label: "CartoDB Positron", value: "positron" },
+          { label: "OpenTopoMap", value: "osm_topo" },
           { label: "OpenStreetMap", value: "osm" },
           { label: "CyclOSM", value: "osm_cyclosm" },
           { label: "Stamen Watercolor", value: "stamen_watercolor" },

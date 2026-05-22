@@ -1,5 +1,5 @@
 {
-    "author": "Karl",
+    "author": "TT-RC",
     "dependencies": {
         "@rebble/clay": "^1.0.0"
     },
@@ -21,7 +21,6 @@
             "location",
             "configurable"
         ],
-        "shortName": "PebbleTrail",
         "displayName": "PebbleTrail Map",
         "enableMultiJS": true,
         "messageKeys": [
@@ -67,5 +66,5 @@
             "watchface": false
         }
     },
-    "version": "1.3.0"
+    "version": "2.0.0"
 }
