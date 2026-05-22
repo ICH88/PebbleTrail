@@ -1,8 +1,8 @@
 # PebbleTrail Map
 May your trails be pebbly and your Pebbles trail-worthy! Stay safe out there, and may your adventures be filled with joy and discovery. Happy trails!
 
-<img width="1000" alt="PXL_20260522_144412459" src="https://github.com/user-attachments/assets/91109ab6-9d70-4fe1-bc02-589db19ec09c" />
-<img width="1000" alt="PXL_20260522_144201239" src="https://github.com/user-attachments/assets/65bd19a7-b7fc-4234-a909-260a78c0956a" />
+<img width="300" alt="PXL_20260522_144412459" src="https://github.com/user-attachments/assets/91109ab6-9d70-4fe1-bc02-589db19ec09c" />
+<img width="300" alt="PXL_20260522_144201239" src="https://github.com/user-attachments/assets/65bd19a7-b7fc-4234-a909-260a78c0956a" />
 
 
 
@@ -21,6 +21,7 @@ PebbleTrail Map supports multiple map providers, which can be configured in the 
 
 ## Settings
 The app provides a settings page where users can customize various aspects of the map and GPX track.
+
 <img src="images/settings.png" alt="Settings Screen on the phone" width="200"/>
 
 
