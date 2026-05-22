@@ -4,6 +4,8 @@ May your trails be pebbly and your Pebbles trail-worthy! Stay safe out there, an
 <img height="300" alt="PXL_20260522_144412459" src="https://github.com/user-attachments/assets/91109ab6-9d70-4fe1-bc02-589db19ec09c" />
 <img height="300" alt="PXL_20260522_144201239" src="https://github.com/user-attachments/assets/65bd19a7-b7fc-4234-a909-260a78c0956a" />
 
+<img width="144" height="168" alt="pebble_screenshot" src="https://github.com/user-attachments/assets/ef65b86a-ced6-4610-a2df-806ec32c99eb" />
+
 
 
 
