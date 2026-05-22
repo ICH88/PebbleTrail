@@ -6,6 +6,7 @@ May your trails be pebbly and your Pebbles trail-worthy! Stay safe out there, an
 
 
 
+
 PebbleTrail Map is a Pebble smartwatch application that provides real-time GPS tracking and map rendering with track display. It allows users to view their current location, display GPX tracks, and interact with the map using the watch buttons.
 
 ## Features
