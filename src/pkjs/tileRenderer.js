@@ -98,14 +98,7 @@ function getOutputFormat(width, isColor, enforceMonochrome) {
     };
   }
 
-  function drawGpxTrack(
-    ctx,
-    gpxPoints,
-    gpxLineStyle,
-    zoom,
-    topLeftWorldX,
-    topLeftWorldY
-  ) {
+function drawGpxTrack(ctx, gpxPoints, zoom, topLeftWorldX, topLeftWorldY) {
     if (!gpxPoints || gpxPoints.length === 0) {
       return;
     }
@@ -113,8 +106,8 @@ function getOutputFormat(width, isColor, enforceMonochrome) {
     var firstPoint = gpxPoints[0];
     var firstTileX = geo.long2tileFloat(firstPoint.lon, zoom);
     var firstTileY = geo.lat2tileFloat(firstPoint.lat, zoom);
+    
     ctx.beginPath();
-    ctx.setLineDash && ctx.setLineDash(JSON.parse(gpxLineStyle || "[]"));
     ctx.moveTo(
       firstTileX * 256 - topLeftWorldX,
       firstTileY * 256 - topLeftWorldY
@@ -128,66 +121,85 @@ function getOutputFormat(width, isColor, enforceMonochrome) {
     }
   }
 
-  function drawOverlays(ctx, params) {
-    var config = params.config;
-    var zoom = params.zoom;
-    var showZoomLevel =
-      config.showZoomLevel === undefined ? false : config.showZoomLevel;
-    var showZoomButtons =
-      config.showZoomButtons === undefined ? true : config.showZoomButtons;
-    var topLeftWorldX = params.topLeftWorldX;
-    var topLeftWorldY = params.topLeftWorldY;
-    var centerWorldX = params.centerWorldX;
-    var centerWorldY = params.centerWorldY;
+function drawOverlays(ctx, params) {
+  var config = params.config;
+  var zoom = params.zoom;
+  var topLeftWorldX = params.topLeftWorldX;
+  var topLeftWorldY = params.topLeftWorldY;
+  var centerWorldX = params.centerWorldX;
+  var centerWorldY = params.centerWorldY;
 
-    if (
-      config.showGpxTrack &&
-      config.gpxPoints &&
-      config.gpxPoints.length > 0
-    ) {
-      drawGpxTrack(
-        ctx,
-        config.gpxPoints,
-        config.gpxLineStyle,
-        zoom,
-        topLeftWorldX,
-        topLeftWorldY
-      );
+  if (config.showGpxTrack && config.gpxPoints && config.gpxPoints.length > 0) {
+    // 1. Build the path
+    drawGpxTrack(ctx, config.gpxPoints, zoom, topLeftWorldX, topLeftWorldY);
+
+    // Safe JSON parser fallback
+    var dashArray = [];
+    try {
+      if (config.gpxLineStyle) {
+        dashArray = JSON.parse(config.gpxLineStyle);
+      }
+    } catch (e) {
+      console.log("Could not parse gpxLineStyle, defaulting to solid: " + config.gpxLineStyle);
+    }
+
+    if (params.outputIsColor) {
+      // --- COLOR WATCHES ---
+      ctx.setLineDash && ctx.setLineDash(dashArray);
       ctx.strokeStyle = "#" + (config.gpxTrackColor || "0000FF");
       ctx.lineWidth = 3;
       ctx.stroke();
-    }
+    } else {
+      // --- B&W WATCHES (High-Contrast Dashes) ---
+      
+      // A) Thick White Halo
+      ctx.setLineDash && ctx.setLineDash([]);
+      ctx.strokeStyle = "#FFFFFF";
+      ctx.lineWidth = 6;
+      ctx.stroke();
 
-    if (config.showCurrentLocationDot) {
-      var gpsDotX = centerWorldX - topLeftWorldX;
-      var gpsDotY = centerWorldY - topLeftWorldY;
-      ctx.beginPath();
-      ctx.arc(gpsDotX, gpsDotY, 4, 0, 2 * Math.PI);
-      ctx.fillStyle = "rgba(255, 0, 0, 0.8)";
-      ctx.fill();
-    }
-
-    if (showZoomLevel) {
-      var zoomLevelText = "z" + zoom;
-      ctx.font = "12px sans-serif";
-      var textX = 4;
-      var textY = params.height - 16;
-      ctx.fillStyle = "rgb(0, 0, 0)";
-      ctx.textAlign = "left";
-      ctx.textBaseline = "top";
-      ctx.fillText(zoomLevelText, textX, textY);
-    }
-
-    if (showZoomButtons) {
-      ctx.fillStyle = "rgb(0, 0, 0)";
-      ctx.font = "16px sans-serif";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-
-      ctx.fillText("＋", params.width - 10, (params.height / 12) * 2);
-      ctx.fillText("－", params.width - 10, (params.height / 12) * 10);
+      // B) Thinner Black Dashes
+      if (!dashArray || dashArray.length === 0) {
+        dashArray = [8, 8]; 
+      }
+      
+      ctx.setLineDash && ctx.setLineDash(dashArray);
+      ctx.strokeStyle = "#000000";
+      ctx.lineWidth = 4;
+      ctx.stroke();
     }
   }
+
+  if (config.showCurrentLocationDot) {
+    var gpsDotX = centerWorldX - topLeftWorldX;
+    var gpsDotY = centerWorldY - topLeftWorldY;
+    ctx.beginPath();
+    ctx.arc(gpsDotX, gpsDotY, 4, 0, 2 * Math.PI);
+    ctx.fillStyle = "rgba(255, 0, 0, 0.8)";
+    ctx.fill();
+  }
+
+  if (config.showZoomLevel) {
+    var zoomLevelText = "z" + zoom;
+    ctx.font = "12px sans-serif";
+    var textX = 4;
+    var textY = params.height - 16;
+    ctx.fillStyle = "rgb(0, 0, 0)";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.fillText(zoomLevelText, textX, textY);
+  }
+
+  if (config.showZoomButtons) {
+    ctx.fillStyle = "rgb(0, 0, 0)";
+    ctx.font = "16px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    ctx.fillText("＋", params.width - 10, (params.height / 12) * 2);
+    ctx.fillText("－", params.width - 10, (params.height / 12) * 10);
+  }
+}
 
 function packCanvas(ctx, width, height, outputFormat) {
     var imageData = ctx.getImageData(0, 0, width, height);
@@ -281,7 +293,7 @@ function packCanvas(ctx, width, height, outputFormat) {
         return;
       }
 
-      drawOverlays(ctx, {
+drawOverlays(ctx, {
         config: config,
         zoom: zoom,
         width: width,
@@ -290,6 +302,7 @@ function packCanvas(ctx, width, height, outputFormat) {
         topLeftWorldY: viewport.topLeftWorldY,
         centerWorldX: viewport.centerWorldX,
         centerWorldY: viewport.centerWorldY,
+        outputIsColor: outputFormat.outputIsColor
       });
 
       var packedFrame = packCanvas(ctx, width, height, outputFormat);
