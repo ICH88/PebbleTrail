@@ -15,13 +15,13 @@
         "openstreetmap",
         "stadiamaps"
     ],
-    "name": "pebbletrail-map",
+    "name": "pebbletrail-fork",
     "pebble": {
         "capabilities": [
             "location",
             "configurable"
         ],
-        "displayName": "PebbleTrail Map",
+        "displayName": "PebbleTrail 2.0",
         "enableMultiJS": true,
         "messageKeys": [
             "cmd",
@@ -66,5 +66,5 @@
             "watchface": false
         }
     },
-    "version": "2.1.0"
+    "version": "2.1.1"
 }

@@ -173,10 +173,29 @@ function drawOverlays(ctx, params) {
   if (config.showCurrentLocationDot) {
     var gpsDotX = centerWorldX - topLeftWorldX;
     var gpsDotY = centerWorldY - topLeftWorldY;
-    ctx.beginPath();
-    ctx.arc(gpsDotX, gpsDotY, 4, 0, 2 * Math.PI);
-    ctx.fillStyle = "rgba(255, 0, 0, 0.8)";
-    ctx.fill();
+
+    if (!params.outputIsColor) {
+      // --- B&W WATCHES: High-Contrast "Halo" Style ---
+      
+      // 1. Weißer Außenring (Halo)
+      ctx.beginPath();
+      ctx.arc(gpsDotX, gpsDotY, 6, 0, 2 * Math.PI);
+      ctx.fillStyle = "#FFFFFF";
+      ctx.fill();
+
+      // 2. Schwarzer Kern
+      ctx.beginPath();
+      ctx.arc(gpsDotX, gpsDotY, 4, 0, 2 * Math.PI);
+      ctx.fillStyle = "#000000";
+      ctx.fill();
+      
+    } else {
+      // --- COLOR WATCHES: Standard Style ---
+      ctx.beginPath();
+      ctx.arc(gpsDotX, gpsDotY, 4, 0, 2 * Math.PI);
+      ctx.fillStyle = "rgba(255, 0, 0, 0.8)";
+      ctx.fill();
+    }
   }
 
   if (config.showZoomLevel) {
