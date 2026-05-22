@@ -1,7 +1,9 @@
 # PebbleTrail Map
 > May your trails be pebbly and your Pebbles trail-worthy! Stay safe out there, and may your adventures be filled with joy and discovery. Happy trails!
 
-Get the app on the [App Store](https://apps.repebble.com/85c73ce43dac489ea6b8908d). :slightly_smiling_face:
+<img width="3880" height="4222" alt="PXL_20260522_144412459" src="https://github.com/user-attachments/assets/91109ab6-9d70-4fe1-bc02-589db19ec09c" />
+<img width="4186" height="4492" alt="PXL_20260522_144201239" src="https://github.com/user-attachments/assets/65bd19a7-b7fc-4234-a909-260a78c0956a" />
+
 
 
 PebbleTrail Map is a Pebble smartwatch application that provides real-time GPS tracking and map rendering with track display. It allows users to view their current location, display GPX tracks, and interact with the map using the watch buttons.
@@ -31,6 +33,4 @@ Many thanks to the map providers for their services and data. The following attr
 This project was developed with use of AI assistance, which helped in code generation and debugging. The AI was used to enhance the development process and improve code quality.
 
 ## Known limitations
-- The app relies on the Canvas API for rendering maps, which may not be supported in all environments. If canvas support is unavailable, the app will display an error message on the watch.
-- The app does not currently support offline map caching, so an active internet connection is required to load maps and GPX tracks.
-- I only tried the app on a Pebble Time, so there may be compatibility issues with other Pebble models or firmware versions.
+- I only tried the app on a Pebble Steel, so there may be compatibility issues with other Pebble models or firmware versions.
