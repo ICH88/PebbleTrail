@@ -159,9 +159,9 @@ function drawOverlays(ctx, params) {
       ctx.stroke();
 
       // B) Thinner Black Dashes
-      if (!dashArray || dashArray.length === 0) {
-        dashArray = [8, 8]; 
-      }
+      //if (!dashArray || dashArray.length === 0) {
+      //  dashArray = [8, 8]; 
+      //}
       
       ctx.setLineDash && ctx.setLineDash(dashArray);
       ctx.strokeStyle = "#000000";
